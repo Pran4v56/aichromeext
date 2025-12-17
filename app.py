@@ -1,59 +1,106 @@
-'''VERSION 3'''
 import os
-import openai 
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
+import openai
+
+load_dotenv()
 
 app = Flask(__name__)
-load_dotenv()
 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def ask_openai(prompt):
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}]
+MODEL = "gpt-4o-mini"
+
+
+def chat_completion(messages):
+    resp = client.chat.completions.create(
+        model=MODEL,
+        messages=messages,
+        temperature=0.4,
     )
-    return response.choices[0].message.content.strip()
+    return resp.choices[0].message.content.strip()
 
-@app.route('/summarize', methods=['POST'])
+
+@app.post("/summarize")
 def summarize():
-    data = request.json
-    text = data.get('text', '')
-    result = ask_openai(f"Summarize the following text concisely. Your summary must be shorter than the original text, include all key points and main ideas, use simple and direct language, and maintain logical flow. Omit minor details unless crucial to understanding. Provide only the summary without additional commentary.:\n\n{text}")
-    return jsonify({'result': result})
+    data = request.get_json(force=True)
+    text = (data.get("text") or "").strip()
 
-@app.route('/paraphrase', methods=['POST'])
-def paraphrase():
-    data = request.json
-    text = data.get('text', '')
-    result = ask_openai(f"Paraphrase the following text by rewriting it using different words and sentence structures while preserving the exact same meaning. Keep the length similar to the original. Provide only the paraphrased text without additional commentary.:\n\n{text}")
-    return jsonify({'result': result})
+    messages = [
+        {"role": "system", "content": "Summarize clearly and concisely. Return only the summary."},
+        {"role": "user", "content": text},
+    ]
+    return jsonify({"result": chat_completion(messages)})
 
-@app.route('/rewrite', methods=['POST'])
-def rewrite():
-    data = request.json
-    text = data.get('text', '')
-    result = ask_openai(f"Rewrite the following text to improve clarity, flow, and readability while maintaining the core message. Use simpler language where appropriate and ensure the text is engaging. Provide only the rewritten text without additional commentary.:\n\n{text}")
-    return jsonify({'result': result})
 
-@app.route('/define', methods=['POST'])
+@app.post("/define")
 def define():
-    data = request.json
-    text = data.get('text', '')
-    result = ask_openai(f"Define the following term or phrase clearly and concisely. If it's a single word, provide the meaning and 2-3 synonyms. If it's a phrase, explain what it means in simple terms. Keep the explanation brief and easy to understand. Provide only the definition without additional commentary.:\n\n{text}")
-    return jsonify({'result': result})
+    data = request.get_json(force=True)
+    text = (data.get("text") or "").strip()
 
-@app.route('/chat', methods=['POST'])
+    messages = [
+        {"role": "system", "content": "Define the term/phrase simply. If single word, give meaning + 2-3 synonyms. Return only the definition."},
+        {"role": "user", "content": text},
+    ]
+    return jsonify({"result": chat_completion(messages)})
+
+
+@app.post("/translate")
+def translate():
+    """
+    Request body:
+      { "text": "...", "target_language": "Spanish" }
+    """
+    data = request.get_json(force=True)
+    text = (data.get("text") or "").strip()
+    target_language = (data.get("target_language") or "Spanish").strip()
+
+    messages = [
+        {"role": "system", "content": f"Translate the user's text to {target_language}. Return only the translation."},
+        {"role": "user", "content": text},
+    ]
+    return jsonify({"result": chat_completion(messages), "target_language": target_language})
+
+
+@app.post("/paraphrase")
+def paraphrase():
+    data = request.get_json(force=True)
+    text = (data.get("text") or "").strip()
+
+    messages = [
+        {"role": "system", "content": "Paraphrase using different wording and structure but preserve meaning. Keep similar length. Return only the paraphrase."},
+        {"role": "user", "content": text},
+    ]
+    return jsonify({"result": chat_completion(messages)})
+
+
+@app.post("/chat")
 def chat():
-    try:
-        data = request.json
-        text = data.get('text', '')
-        prompt = f"You are a helpful assistant. User: {text}\nAssistant:"
-        result = ask_openai(prompt)
-        return jsonify({'result': result})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    """
+    Request body:
+      {
+        "messages": [{"role":"user","content":"..."}, {"role":"assistant","content":"..."} ...],
+        "selected_text": "optional context"
+      }
+    """
+    data = request.get_json(force=True)
+    messages = data.get("messages") or []
+    selected_text = (data.get("selected_text") or "").strip()
+
+    # Basic validation / normalization
+    cleaned = []
+    for m in messages:
+        role = m.get("role")
+        content = (m.get("content") or "").strip()
+        if role in ("system", "user", "assistant") and content:
+            cleaned.append({"role": role, "content": content})
+
+    system = "You are a helpful assistant. Be clear, direct, and correct."
+    if selected_text:
+        system += f"\n\nContext (user selection):\n{selected_text}"
+
+    final_messages = [{"role": "system", "content": system}] + cleaned[-20:]  # keep last 20 turns
+    return jsonify({"result": chat_completion(final_messages)})
+
+
 if __name__ == "__main__":
-    app.run(port=3000)      
-
-
+    app.run(host="127.0.0.1", port=3000, debug=True)

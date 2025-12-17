@@ -1,39 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Text Helper",
-  "version": "1.0",
-  "description": "Summarize, paraphrase, and rewrite selected text",
+  "version": "2.0",
+  "description": "Summarize, define, translate, paraphrase, chat, and read selected text aloud.",
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": [
-    "scripting",
-    "activeTab"
-  ],
+  "permissions": ["scripting", "activeTab", "contextMenus"],
+  "host_permissions": ["http://127.0.0.1:3000/*", "http://localhost:3000/*"],
   "commands": {
-    "summarize-selection": {
-      "suggested_key": {
-        "default": "Alt+Shift+S"
-      },
-      "description": "Summarize selected text"
-    },
-    "define-selection": {
-      "suggested_key": {
-        "default": "Alt+Shift+D"
-      },
-      "description": "Define selected text"
-    },
     "feature-picker": {
-      "suggested_key": {
-        "default": "Alt+Shift+E"
-      },
-      "description": "Show AI Actions Picker Window"
+      "suggested_key": { "default": "Alt+Shift+E" },
+      "description": "Open Text Helper panel"
     }
-  },
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"]
-    }
-  ]
+  }
 }
